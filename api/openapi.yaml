@@ -1,0 +1,331 @@
+openapi: 3.1.0
+
+info:
+  title: matrix-qr-api-go
+  version: 1.0.0
+  description: |
+    Computes the QR factorization of a rectangular matrix with Householder reflections and returns
+    Q, R and the statistics calculated by matrix-stats-api-node.
+
+    The factorization is returned in reduced form (Q is m×k and R is k×n, with k = min(m, n)),
+    with a non-negative diagonal in R. Values use full float64 precision.
+
+servers:
+  - url: http://localhost:8080
+    description: Local
+  - url: https://app-matrix-qr-api-go-h8cmdmddgkezh2gm.centralus-01.azurewebsites.net
+    description: Azure
+
+tags:
+  - name: Health
+    description: Service status.
+  - name: Auth
+    description: Access tokens for the API.
+  - name: QR factorization
+    description: QR factorization and statistics of a matrix.
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Check that the service is running
+      security: []
+      responses:
+        "200":
+          description: The service is running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Get an access token for the demo user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Valid credentials. The token works for qr-api and stats-api.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/MalformedJson"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/qr:
+    post:
+      tags: [QR factorization]
+      operationId: factorizeMatrix
+      summary: Compute the QR factorization of a matrix and its statistics
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QrRequest"
+            example:
+              matrix:
+                - [12, -51, 4]
+                - [6, 167, -68]
+                - [-4, 24, -41]
+      responses:
+        "200":
+          description: Q, R and their statistics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrResponse"
+              example:
+                q:
+                  - [0.8571428571428571, -0.3942857142857143, -0.3314285714285714]
+                  - [0.42857142857142855, 0.9028571428571428, 0.03428571428571429]
+                  - [-0.2857142857142857, 0.17142857142857143, -0.9428571428571428]
+                r:
+                  - [14, 21, -14]
+                  - [0, 175, -70]
+                  - [0, 0, 35]
+                statistics:
+                  max: 175
+                  min: -70
+                  average: 8.96888888888889
+                  sum: 161.44
+                  diagonal:
+                    any: false
+                    matrices:
+                      q: false
+                      r: false
+        "400":
+          $ref: "#/components/responses/MalformedJson"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/InvalidMatrix"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "502":
+          $ref: "#/components/responses/StatsServiceError"
+        "503":
+          $ref: "#/components/responses/StatsServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/StatsServiceTimeout"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token returned by `POST /api/v1/auth/login`.
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          const: ok
+        service:
+          type: string
+          const: matrix-qr-api-go
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: demo
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: Signed JWT (HS256).
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+          description: Seconds until the token expires.
+          example: 3600
+
+    Matrix:
+      type: array
+      description: Rows of the matrix. Every row must have the same number of columns.
+      minItems: 1
+      items:
+        type: array
+        minItems: 1
+        items:
+          type: number
+
+    QrRequest:
+      type: object
+      required: [matrix]
+      properties:
+        matrix:
+          allOf:
+            - $ref: "#/components/schemas/Matrix"
+          description: Rectangular matrix of at most 100×100 values. `null` values are rejected.
+
+    QrResponse:
+      type: object
+      required: [q, r, statistics]
+      properties:
+        q:
+          allOf:
+            - $ref: "#/components/schemas/Matrix"
+          description: Matrix with orthonormal columns (m×k).
+        r:
+          allOf:
+            - $ref: "#/components/schemas/Matrix"
+          description: Upper triangular matrix with a non-negative diagonal (k×n).
+        statistics:
+          $ref: "#/components/schemas/Statistics"
+
+    Statistics:
+      type: object
+      description: Calculated by matrix-stats-api-node over all the values of Q and R together.
+      required: [max, min, average, sum, diagonal]
+      properties:
+        max:
+          type: number
+        min:
+          type: number
+        average:
+          type: number
+        sum:
+          type: number
+        diagonal:
+          type: object
+          required: [any, matrices]
+          properties:
+            any:
+              type: boolean
+              description: True when at least one of the matrices is diagonal.
+            matrices:
+              type: object
+              required: [q, r]
+              properties:
+                q:
+                  type: boolean
+                r:
+                  type: boolean
+
+    ProblemDetails:
+      type: object
+      description: RFC 9457 Problem Details, with the extension members `code` and `requestId`.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          example: about:blank
+        title:
+          type: string
+          example: Unprocessable Content
+        status:
+          type: integer
+          example: 422
+        detail:
+          type: string
+          example: row 1 has 1 columns, expected 2
+        instance:
+          type: string
+          example: /api/v1/qr
+        code:
+          type: string
+          enum:
+            - MALFORMED_JSON
+            - UNAUTHORIZED
+            - PAYLOAD_TOO_LARGE
+            - INVALID_MATRIX
+            - RATE_LIMITED
+            - INTERNAL_ERROR
+            - STATS_SERVICE_ERROR
+            - STATS_SERVICE_UNAVAILABLE
+            - STATS_SERVICE_TIMEOUT
+        requestId:
+          type: string
+
+  responses:
+    MalformedJson:
+      description: "`MALFORMED_JSON`: the body is not valid JSON or has wrong types."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: "`UNAUTHORIZED`: missing, invalid or expired token, or wrong credentials."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    PayloadTooLarge:
+      description: "`PAYLOAD_TOO_LARGE`: the body exceeds 1 MB."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    InvalidMatrix:
+      description: "`INVALID_MATRIX`: the matrix is empty, not rectangular, has `null` values or exceeds 100×100."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    RateLimited:
+      description: "`RATE_LIMITED`: too many requests."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    InternalError:
+      description: "`INTERNAL_ERROR`: unexpected error."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    StatsServiceError:
+      description: "`STATS_SERVICE_ERROR`: matrix-stats-api-node returned an unexpected response."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    StatsServiceUnavailable:
+      description: "`STATS_SERVICE_UNAVAILABLE`: matrix-stats-api-node could not be reached."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    StatsServiceTimeout:
+      description: "`STATS_SERVICE_TIMEOUT`: matrix-stats-api-node did not answer in time."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
