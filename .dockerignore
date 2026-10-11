@@ -1,0 +1,12 @@
+.git
+.gitignore
+.gitattributes
+.editorconfig
+.dockerignore
+Dockerfile
+*.md
+.env
+.env.*
+/bin/
+/dist/
+/coverage/
