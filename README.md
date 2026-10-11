@@ -2,7 +2,7 @@
 
 API en **Go + Fiber v3** que recibe una matriz rectangular, calcula su **factorización QR** y obtiene sus estadísticas desde `matrix-stats-api-node`.
 
-> En construcción: por ahora solo expone `GET /health`.
+> En construcción: por ahora solo expone `GET /health` y su documentación en `/docs`.
 
 ## Requisitos
 
@@ -14,6 +14,16 @@ API en **Go + Fiber v3** que recibe una matriz rectangular, calcula su **factori
 ```bash
 go run ./cmd/api
 curl http://127.0.0.1:8080/health   # {"status":"ok"}
+```
+
+## Documentación (Swagger)
+
+Con el servidor levantado: http://127.0.0.1:8080/docs/index.html
+
+Cada endpoint se documenta con anotaciones de [swag](https://github.com/swaggo/swag) sobre su handler. Después de agregar o cambiar anotaciones, regenera el paquete `docs/`:
+
+```bash
+go tool swag init --dir ./cmd/api --generalInfo main.go --output ./docs --outputTypes go
 ```
 
 ## Correr con Docker
