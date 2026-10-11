@@ -21,5 +21,5 @@ func main() {
 }
 
 func handleHealth(requestContext fiber.Ctx) error {
-	return requestContext.JSON(healthResponse{Status: "ok"})
+	return requestContext.JSON(healthResponse{Status: "ok", Service: "matrix-qr-api-go"})
 }
